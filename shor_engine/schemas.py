@@ -14,6 +14,8 @@ class ShorStageResult:
     stage_name: str
     status: str  # "SUCCESS", "SKIPPED", "FAILED", "INFO"
     summary: str
+    inputs: Dict[str, Any] = field(default_factory=dict)
+    outputs: Dict[str, Any] = field(default_factory=dict)
     details: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass

@@ -67,10 +67,22 @@ if run_btn:
     with tab1:
         st.subheader("Algorithm Step-by-Step Execution")
         for stage in result.stages:
-            status_icon = "✅" if stage.status == "SUCCESS" else ("ℹ️" if stage.status == "INFO" else "⚠️")
+            status_icon = {
+                "SUCCESS": "✅",
+                "INFO": "ℹ️",
+                "SKIPPED": "⏭️",
+                "FAILED": "⚠️",
+            }.get(stage.status, "⚠️")
             with st.expander(f"{status_icon} {stage.stage_name}", expanded=True):
                 st.write(stage.summary)
+                if stage.inputs:
+                    st.markdown("**Inputs passed to this stage**")
+                    st.json(stage.inputs)
+                if stage.outputs:
+                    st.markdown("**Outputs passed to the next stage**")
+                    st.json(stage.outputs)
                 if stage.details:
+                    st.markdown("**Additional diagnostics**")
                     st.json(stage.details)
 
     with tab2:

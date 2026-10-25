@@ -20,6 +20,10 @@ An interactive, end-to-end demonstrator of Peter Shor's quantum integer factoriz
 * **Classical Factor Extraction:** Computes $\gcd(a^{r/2} \pm 1, N)$ to extract non-trivial factors.
 * **Interactive Probability Visualisation:** Dynamic Plotly distribution of measured phase states.
 
+## 🔄 Data Flow Trace
+
+Each run returns one `ShorExecutionResult`. Its ordered stage records expose the inputs and outputs passed between classical precheck, period finding, continued-fraction recovery, and factor extraction. The Streamlit stage view renders those handoffs, and the circuit, chart, period table, and final factors use data from that same run. See [docs/data-flow.md](docs/data-flow.md) for the stage contract and execution-mode limitations.
+
 ---
 
 ## 📦 Setup & Installation
