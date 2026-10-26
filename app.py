@@ -87,51 +87,79 @@ st.markdown("""
 st.title("⚛️ Shor's Algorithm Interactive Demonstrator")
 st.caption("Quantum Integer Factorization Engine — AION-IA Internship Task 04")
 
-# Sidebar Controls
-with st.sidebar:
-    st.header("⚙️ Configuration")
-    N = st.number_input("Target Integer (N)", min_value=3, max_value=99, value=15, step=2)
-    
-    custom_a = st.checkbox("Specify Coprime Base (a)", value=False)
-    a_val = None
-    if custom_a:
-        a_val = st.number_input("Base (a)", min_value=2, max_value=N-1, value=7)
-    
-    st.divider()
-    st.subheader("Quantum Parameters")
-    counting_qubits = st.slider("Counting Qubits", min_value=2, max_value=6, value=4)
-    shots = st.select_slider("Simulation Shots", options=[512, 1024, 2048, 4096], value=2048)
-    
-    run_btn = st.button("🚀 Execute Factorization", type="primary", use_container_width=True)
+tab_factor, tab_flow, tab_circuit, tab_measurements, tab_period, tab_notes = st.tabs([
+    "🧮 Factor a Number",
+    "📋 Data Flow",
+    "⚛️ Quantum Circuit",
+    "📊 Measurements",
+    "🔄 Period Recovery",
+    "📑 About this Demo",
+])
 
-# Main Stage Display
-if run_btn:
-    with st.spinner("Processing Shor's Pipeline..."):
-        result = run_shor_pipeline(N=N, a=a_val, num_counting_qubits=counting_qubits, shots=shots)
+with tab_factor:
+    st.subheader("Try factoring an integer")
+    st.write("Enter a number and run the demonstrator. You can let it choose a base or provide one yourself.")
 
-    # Top Status Bar
-    if result.success:
-        st.success(f"### 🎉 Factorization Successful: {N} = {result.factors[0]} × {result.factors[1]}")
+    with st.form("factor_number_form"):
+        input_col, base_col = st.columns(2)
+        with input_col:
+            N = st.number_input("Integer to factor", min_value=2, max_value=99, value=15, step=1)
+        with base_col:
+            base_mode = st.selectbox("Base selection", ["Choose automatically", "I want to choose a base"])
+            a_val = None
+            if base_mode == "I want to choose a base" and N >= 3:
+                a_val = st.number_input("Base a", min_value=2, max_value=int(N) - 1,
+                                        value=min(7, int(N) - 1), step=1)
+            elif base_mode == "I want to choose a base":
+                st.caption("A base is not needed for this input.")
+
+        with st.expander("Simulation settings"):
+            setting_col1, setting_col2 = st.columns(2)
+            with setting_col1:
+                counting_qubits = st.slider("Counting qubits", min_value=2, max_value=6, value=4)
+            with setting_col2:
+                shots = st.select_slider("Measurements", options=[512, 1024, 2048, 4096], value=2048)
+
+        run_btn = st.form_submit_button("Factor this number", type="primary", use_container_width=True)
+
+    if run_btn:
+        with st.spinner("Running the factorisation steps…"):
+            st.session_state["shor_result"] = run_shor_pipeline(
+                N=int(N), a=int(a_val) if a_val is not None else None,
+                num_counting_qubits=counting_qubits, shots=shots,
+            )
+
+    result = st.session_state.get("shor_result")
+    if result is None:
+        st.info("Your result and explanation will appear here after you run a factorisation.")
+    elif result.success:
+        st.success(f"{result.N} = {result.factors[0]} × {result.factors[1]}")
+        result_col1, result_col2 = st.columns(2)
+        result_col1.metric("First factor", result.factors[0])
+        result_col2.metric("Second factor", result.factors[1])
+        st.caption("Check: the two factors multiply back to the number you entered.")
+        st.write("Want to see how it got there? Open the Data Flow, Measurements, and Period Recovery tabs.")
+    elif "prime number" in result.message.lower():
+        st.info(result.message)
     else:
-        st.error(f"### ❌ Factorization Incomplete: {result.message}")
+        st.warning(result.message)
 
-    # Tabs for Data Flow Stages
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📋 Stages & Data Flow", 
-        "⚛️ Quantum Circuit", 
-        "📊 Measurement Distribution", 
-        "🔄 Period Recovery (C.F.)",
-        "📑 Technical Notes"
-    ])
+    if result is not None:
+        st.caption(
+            "This run used a Qiskit Aer circuit." if result.is_quantum_executed
+            else "This run used the classical precheck or analytical emulation; no quantum circuit was executed."
+        )
 
-    with tab1:
-        st.subheader("Algorithm Step-by-Step Execution")
+result = st.session_state.get("shor_result")
+
+with tab_flow:
+    if result is None:
+        st.info("Run a factorisation in the Factor a Number tab to see its data flow.")
+    else:
+        st.subheader("Follow the values through the algorithm")
         for stage in result.stages:
             status_icon = {
-                "SUCCESS": "✅",
-                "INFO": "ℹ️",
-                "SKIPPED": "⏭️",
-                "FAILED": "⚠️",
+                "SUCCESS": "✅", "INFO": "ℹ️", "SKIPPED": "⏭️", "FAILED": "⚠️",
             }.get(stage.status, "⚠️")
             with st.expander(f"{status_icon} {stage.stage_name}", expanded=True):
                 st.write(stage.summary)
@@ -140,46 +168,55 @@ if run_btn:
                 if stage.details:
                     _render_trace_fields(stage.details, section="Extra notes")
 
-    with tab2:
-        st.subheader("Quantum Phase Estimation Circuit")
+with tab_circuit:
+    if result is None:
+        st.info("Run a factorisation first to see its circuit view.")
+    else:
+        st.subheader("Quantum phase-estimation circuit")
         if result.is_quantum_executed:
-            st.info("Direct Qiskit gate-level execution with modular exponentiation unitaries:")
-            st.code(result.circuit_ascii, language="text")
+            st.info("This run used direct Qiskit gate-level simulation.")
         else:
-            st.warning("Quantum Circuit visualization bypassed (Handled classically or via QPE emulator).")
-            st.code(result.circuit_ascii, language="text")
+            st.warning("This run did not execute a quantum circuit. The view is an explanation or emulation placeholder.")
+        st.code(result.circuit_ascii or "No circuit was needed for this input.", language="text")
 
-    with tab3:
-        st.subheader("Measured Phase Probabilities")
-        if result.probabilities:
-            fig = render_measurement_chart(result.probabilities)
-            st.plotly_chart(fig, use_container_width=True)
-            
-            df_counts = pd.DataFrame([
-                {"State |x⟩": k, "Decimal": int(k, 2), "Counts": result.measurement_counts[k], "Probability": f"{v:.4f}"}
-                for k, v in result.probabilities.items()
-            ])
-            st.dataframe(df_counts, use_container_width=True)
+with tab_measurements:
+    if result is None:
+        st.info("Run a factorisation first to see its measurement results.")
+    elif result.probabilities:
+        st.subheader("Measured phase probabilities")
+        fig = render_measurement_chart(result.probabilities)
+        st.plotly_chart(fig, use_container_width=True)
+        df_counts = pd.DataFrame([
+            {"State |x⟩": k, "Decimal": int(k, 2), "Counts": result.measurement_counts[k], "Probability": f"{v:.4f}"}
+            for k, v in result.probabilities.items()
+        ])
+        st.dataframe(df_counts, use_container_width=True)
+    else:
+        st.info("There were no quantum measurements for this input.")
 
-    with tab4:
-        st.subheader("Continued Fractions & Order Finding ($a^r \\equiv 1 \\pmod N$)")
-        if result.cf_steps:
-            cf_data = []
-            for s in result.cf_steps:
-                cf_data.append({
-                    "Phase": s.phase_estimate,
-                    "Fraction": s.convergent_fraction,
-                    "Candidate r": s.candidate_r,
-                    "Valid Period?": "✅ Yes" if s.is_valid_period else "❌ No",
-                    "Status": s.explanation
-                })
-            st.table(pd.DataFrame(cf_data))
-        else:
-            st.write("No quantum measurements to process.")
+with tab_period:
+    if result is None:
+        st.info("Run a factorisation first to see how the period was recovered.")
+    elif result.cf_steps:
+        st.subheader("Continued fractions and order finding ($a^r \\equiv 1 \\pmod N$)")
+        cf_data = [{
+            "Phase": step.phase_estimate,
+            "Fraction": step.convergent_fraction,
+            "Candidate r": step.candidate_r,
+            "Valid period?": "✅ Yes" if step.is_valid_period else "❌ No",
+            "Explanation": step.explanation,
+        } for step in result.cf_steps]
+        st.dataframe(pd.DataFrame(cf_data), hide_index=True, use_container_width=True)
+    else:
+        st.info("This run had no quantum measurements to process.")
 
-    with tab5:
-        st.markdown("""
-        ### Physical & Mathematical Limitations
-        1. **Quantum Memory Constraints:** Compiling arbitrary $a^x \\pmod N$ circuits on NISQ simulators requires $\\mathcal{O}(n^3)$ gates and significant ancillary registers. $N=15$ runs natively at gate-level; larger composites use phase-bin emulation.
-        2. **Even Periods Requirement:** Shor's method succeeds when the recovered order $r$ is even and $a^{r/2} \\not\\equiv -1 \\pmod N$. If not met, pick another coprime $a$.
-        """)
+with tab_notes:
+    st.markdown("""
+    ### What this demonstrator does
+    Shor's method uses quantum period finding as one step in integer factorisation. The app shows the input checks, measurement results, period candidates, and classical factor extraction for each run.
+
+    ### Scope of this demo
+    The gate-level Qiskit/Aer circuit runs for **N = 15**. Other accepted odd composites use analytical phase-bin emulation based on a classically computed order, so those examples do not represent quantum circuit execution. Even numbers, primes, and prime powers can be handled by the classical precheck.
+
+    A period only yields factors when it is even and the half-period does not give the `-1 mod N` outcome. If factor extraction fails, try a different base or run again.
+    """)
