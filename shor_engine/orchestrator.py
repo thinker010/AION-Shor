@@ -123,12 +123,14 @@ def run_shor_pipeline(
     final_factors = []
     overall_success = False
     extraction_message = "No factors derived."
+    successful_period = None
 
     for r in periods:
         succ, facts, msg = extract_factors_from_period(r, resolved_a, N)
         if succ:
             final_factors = list(facts)
             overall_success = True
+            successful_period = r
             extraction_message = msg
             break
 
@@ -137,7 +139,7 @@ def run_shor_pipeline(
         status="SUCCESS" if overall_success else "FAILED",
         summary=extraction_message,
         inputs={"N": N, "a": resolved_a, "candidate_periods": periods},
-        outputs={"factors": final_factors, "verified": overall_success and len(final_factors) == 2
+        outputs={"period_used": successful_period, "factors": final_factors, "verified": overall_success and len(final_factors) == 2
                  and final_factors[0] * final_factors[1] == N},
         details={"factors": final_factors}
     ))

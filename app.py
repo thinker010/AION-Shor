@@ -1,7 +1,9 @@
+import math
 import streamlit as st
 import pandas as pd
 from shor_engine.orchestrator import run_shor_pipeline
 from components.distribution_chart import render_measurement_chart
+from components.cycle_visual import render_cycle_visual
 
 
 TRACE_LABELS = {
@@ -156,7 +158,41 @@ with tab_flow:
     if result is None:
         st.info("Run a factorisation in the Factor a Number tab to see its data flow.")
     else:
-        st.subheader("Follow the values through the algorithm")
+        st.subheader("First, watch the number trail")
+        st.write(
+            "Imagine making groups of the number you entered. Multiply by the base, "
+            "keep the leftovers, and do it again. The colored trail shows when those leftovers return to 1."
+        )
+        if result.a > 1 and math.gcd(result.a, result.N) == 1:
+            cycle_period = render_cycle_visual(result.N, result.a)
+            st.caption(
+                f"Each stop is the leftover after multiplying by {result.a} and grouping by {result.N}. "
+                f"The trail comes back to 1 after {cycle_period} steps."
+            )
+            if result.is_quantum_executed:
+                st.info("For this N = 15 run, the Qiskit circuit's measurements are used to recover the period. The trail above is a picture to help explain the repeating pattern.")
+            else:
+                st.info("This trail is an ordinary-math picture of the pattern. For this input, the app uses emulated measurements rather than executing a quantum circuit.")
+
+            factor_stage = next((stage for stage in reversed(result.stages)
+                                 if stage.stage_name.startswith("Stage 4:")), None)
+            period_used = factor_stage.outputs.get("period_used") if factor_stage else None
+            if result.success and period_used is not None and period_used % 2 == 0:
+                half_power = pow(result.a, period_used // 2, result.N)
+                left_gcd = math.gcd(half_power - 1, result.N)
+                right_gcd = math.gcd(half_power + 1, result.N)
+                st.subheader("Then, see how the clues reveal the factors")
+                st.markdown(f"The trail repeats after **{period_used} jumps**. Halfway is **{period_used // 2} jumps**.")
+                st.caption(f"So {result.a} to the power {period_used // 2}, after grouping by {result.N}, leaves {half_power}.")
+                clue_left, clue_right = st.columns(2)
+                clue_left.metric("One less: shared divisor", f"gcd({half_power - 1}, {result.N}) = {left_gcd}")
+                clue_right.metric("One more: shared divisor", f"gcd({half_power + 1}, {result.N}) = {right_gcd}")
+                st.success(f"Those two clues give the factors **{result.factors[0]} × {result.factors[1]} = {result.N}**.")
+        else:
+            st.info("The chosen base already shares a factor with this number, so the app can find a factor directly. It does not need to search for a repeating trail.")
+
+        st.divider()
+        st.subheader("Now follow the values through the algorithm")
         for stage in result.stages:
             status_icon = {
                 "SUCCESS": "✅", "INFO": "ℹ️", "SKIPPED": "⏭️", "FAILED": "⚠️",
