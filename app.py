@@ -3,6 +3,66 @@ import pandas as pd
 from shor_engine.orchestrator import run_shor_pipeline
 from components.distribution_chart import render_measurement_chart
 
+
+TRACE_LABELS = {
+    "N": "Number to factor",
+    "requested_base": "Base requested",
+    "resolved_base": "Base used",
+    "a": "Base used",
+    "counting_qubits": "Counting qubits",
+    "requested_shots": "Requested measurements",
+    "total_shots": "Measurements recorded",
+    "handled_classically": "Solved in the classical check",
+    "quantum_stages_skipped": "Quantum steps skipped",
+    "execution_mode": "How the period was found",
+    "candidate_periods": "Candidate periods",
+    "factors": "Factors found",
+    "verified": "Factor check passed",
+    "executed": "This step ran",
+    "measurement_counts": "Measurement results",
+    "probabilities": "Measurement probabilities",
+    "continued_fraction_steps": "Period-finding calculations",
+}
+
+
+def _trace_text(value):
+    """Turn trace values into short, readable labels for the stage cards."""
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if value is None:
+        return "Not set"
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value) if value else "None"
+    if value == "qiskit_aer":
+        return "Qiskit Aer circuit simulation"
+    if value == "analytical_emulation":
+        return "Analytical emulation (no circuit executed)"
+    return str(value)
+
+
+def _render_trace_fields(fields, *, section, omit=()):
+    """Render stage inputs/outputs as labeled UI rows, never as raw JSON."""
+    visible = [(key, value) for key, value in fields.items() if key not in omit]
+    if not visible:
+        return
+
+    st.markdown(f"**{section}**")
+    for key, value in visible:
+        label = TRACE_LABELS.get(key, key.replace("_", " ").capitalize())
+        if key == "measurement_counts" and value:
+            rows = [
+                {"Measured state": f"|{state}⟩", "Times seen": count}
+                for state, count in sorted(value.items(), key=lambda item: item[1], reverse=True)
+            ]
+            st.caption(label)
+            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        elif key == "probabilities":
+            st.caption("The probability chart in the Measurement Distribution tab visualizes these results.")
+        elif key == "continued_fraction_steps":
+            st.caption("The Period Recovery tab shows each continued-fraction calculation.")
+        else:
+            st.markdown(f"- **{label}:** {_trace_text(value)}")
+
 st.set_page_config(
     page_title="Shor's Algorithm Demonstrator | AION-IA",
     page_icon="⚛️",
@@ -75,15 +135,10 @@ if run_btn:
             }.get(stage.status, "⚠️")
             with st.expander(f"{status_icon} {stage.stage_name}", expanded=True):
                 st.write(stage.summary)
-                if stage.inputs:
-                    st.markdown("**Inputs passed to this stage**")
-                    st.json(stage.inputs)
-                if stage.outputs:
-                    st.markdown("**Outputs passed to the next stage**")
-                    st.json(stage.outputs)
+                _render_trace_fields(stage.inputs, section="What went into this step")
+                _render_trace_fields(stage.outputs, section="What came out of this step")
                 if stage.details:
-                    st.markdown("**Additional diagnostics**")
-                    st.json(stage.details)
+                    _render_trace_fields(stage.details, section="Extra notes")
 
     with tab2:
         st.subheader("Quantum Phase Estimation Circuit")
