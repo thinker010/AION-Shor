@@ -26,6 +26,8 @@ The current implementation executes the gate-level Qiskit/Aer circuit only for `
 
 The analytical histogram distributes shots across bins and assigns any integer remainder to its first bin so the recorded counts sum exactly to the requested shots. Qiskit counts are the simulator's observed counts and may vary by run. Shor factor extraction can also fail for a valid period when it is odd or produces the `-1 mod N` outcome; the trace records the failed extraction instead of claiming success.
 
+For the analytical path, the requested counting-qubit setting is a minimum. The demo may use more virtual phase bits—recorded as `effective_counting_qubits`—so continued fractions can resolve the period for the chosen `N`. This improves the teaching example; it does not make the emulated path a quantum execution.
+
 ## Contract for changes
 
 - Keep stage inputs and outputs JSON-serializable so Streamlit can display them directly.

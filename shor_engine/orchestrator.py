@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 from .schemas import ShorExecutionResult, ShorStageResult
 from .classical_preprocessor import classical_precheck
@@ -63,6 +64,7 @@ def run_shor_pipeline(
     ))
 
     # 2. Quantum Circuit Construction & Simulation
+    effective_counting_qubits = num_counting_qubits
     if N == 15:
         qc = build_shor_circuit_n15(resolved_a, num_counting_qubits)
         counts = simulate_circuit(qc, shots=shots)
@@ -77,12 +79,18 @@ def run_shor_pipeline(
         while pow(resolved_a, r_actual, N) != 1:
             r_actual += 1
 
-        total_states = 2 ** num_counting_qubits
+        # Continued fractions need enough phase precision to resolve periods
+        # up to N. The user's setting is a minimum for this emulated path.
+        effective_counting_qubits = max(
+            num_counting_qubits,
+            2 * math.ceil(math.log2(N)),
+        )
+        total_states = 2 ** effective_counting_qubits
         counts = {}
         for s in range(r_actual):
             phase = s / r_actual
             bin_idx = int(round(phase * total_states)) % total_states
-            bitstr = f"{bin_idx:0{num_counting_qubits}b}"
+            bitstr = f"{bin_idx:0{effective_counting_qubits}b}"
             counts[bitstr] = counts.get(bitstr, 0) + (shots // r_actual)
         # Keep the measurement histogram normalized to the requested shot count.
         remainder = shots - sum(counts.values())
@@ -100,20 +108,22 @@ def run_shor_pipeline(
         summary=(f"Built and simulated the N=15 Qiskit circuit with base a={resolved_a}." if mode == "qiskit_aer"
                  else f"Generated analytical phase-bin emulation for N={N}, base a={resolved_a}; no circuit was executed."),
         inputs={"N": N, "a": resolved_a, "counting_qubits": num_counting_qubits, "requested_shots": shots},
-        outputs={"execution_mode": mode, "measurement_counts": counts, "total_shots": total_shots,
+        outputs={"execution_mode": mode, "effective_counting_qubits": effective_counting_qubits,
+                 "measurement_counts": counts, "total_shots": total_shots,
                  "probabilities": probabilities},
-        details={"circuit_qubits": len(qc.qubits) if mode == "qiskit_aer" else None,
+        details={"requested_counting_qubits": num_counting_qubits,
+                 "circuit_qubits": len(qc.qubits) if mode == "qiskit_aer" else None,
                  "distinct_outcomes": len(counts)}
     ))
 
     # 3. Period Recovery (Continued Fractions)
-    cf_steps, periods = recover_period_from_counts(counts, num_counting_qubits, N, resolved_a)
+    cf_steps, periods = recover_period_from_counts(counts, effective_counting_qubits, N, resolved_a)
 
     stages.append(ShorStageResult(
         stage_name="Stage 3: Period Recovery via Continued Fractions",
         status="SUCCESS" if periods else "FAILED",
         summary=f"Found candidate period(s): {periods}" if periods else "No valid period satisfied modular equivalence.",
-        inputs={"measurement_counts": counts, "counting_qubits": num_counting_qubits, "N": N, "a": resolved_a},
+        inputs={"measurement_counts": counts, "counting_qubits": effective_counting_qubits, "N": N, "a": resolved_a},
         outputs={"candidate_periods": periods,
                  "continued_fraction_steps": [step.__dict__ for step in cf_steps]},
         details={"recovered_periods": periods}
@@ -147,7 +157,7 @@ def run_shor_pipeline(
     return ShorExecutionResult(
         N=N,
         a=resolved_a,
-        num_counting_qubits=num_counting_qubits,
+        num_counting_qubits=effective_counting_qubits,
         shots=shots,
         is_quantum_executed=(mode == "qiskit_aer"),
         stages=stages,

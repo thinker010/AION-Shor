@@ -46,6 +46,14 @@ def test_emulated_measurement_trace_is_normalized():
     assert sum(measurement_stage.outputs["measurement_counts"].values()) == 10
     assert sum(measurement_stage.outputs["probabilities"].values()) == pytest.approx(1.0)
 
+def test_emulated_35_recovers_factors_with_finer_phase_resolution():
+    res = run_shor_pipeline(N=35, a=2, num_counting_qubits=4, shots=2048)
+    assert res.success is True
+    assert set(res.factors) == {5, 7}
+    assert res.recovered_period == 12
+    assert res.stages[1].outputs["execution_mode"] == "analytical_emulation"
+    assert res.stages[1].outputs["effective_counting_qubits"] > 4
+
 def test_gcd_trivial_factor():
     res = run_shor_pipeline(N=15, a=6)
     assert res.success is True

@@ -17,6 +17,7 @@ TRACE_LABELS = {
     "handled_classically": "Solved in the classical check",
     "quantum_stages_skipped": "Quantum steps skipped",
     "execution_mode": "How the period was found",
+    "effective_counting_qubits": "Phase bits used",
     "candidate_periods": "Candidate periods",
     "factors": "Factors found",
     "verified": "Factor check passed",
@@ -147,10 +148,18 @@ with tab_factor:
         st.warning(result.message)
 
     if result is not None:
-        st.caption(
-            "This run used a Qiskit Aer circuit." if result.is_quantum_executed
-            else "This run used the classical precheck or analytical emulation; no quantum circuit was executed."
-        )
+        if result.is_quantum_executed:
+            st.caption("This run used a Qiskit Aer circuit simulation.")
+        elif result.stages[1].outputs.get("execution_mode") == "analytical_emulation":
+            st.caption("This run used analytical emulation; no quantum circuit was executed.")
+            requested_bits = result.stages[1].details.get("requested_counting_qubits", result.num_counting_qubits)
+            if result.num_counting_qubits > requested_bits:
+                st.info(
+                    f"For a clear period result, the emulation increased the virtual phase bits "
+                    f"from {requested_bits} to {result.num_counting_qubits}. This is still a classical emulation, not a quantum run."
+                )
+        else:
+            st.caption("This number was handled by the classical precheck; no quantum circuit was executed.")
 
 result = st.session_state.get("shor_result")
 
