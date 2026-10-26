@@ -49,7 +49,7 @@ def render_cycle_visual(N: int, a: int, *, max_nodes: int = 9) -> int:
             svg.append(f'<path d="M {x + 31} 111 L {next_x - 34} 111" stroke="#718096" stroke-width="2"{dash} marker-end="url(#arrow)"/>')
 
         if power is None:
-                skipped = len(values) - (max_nodes - 1)
+            skipped = len(values) - (max_nodes - 1)
             svg.extend([
                 f'<circle cx="{x}" cy="111" r="27" fill="#374151" stroke="#9ca3af" stroke-dasharray="4 4"/>',
                 f'<text x="{x}" y="117" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="18">…</text>',
