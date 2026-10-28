@@ -90,7 +90,29 @@ st.markdown("""
 st.title("⚛️ Shor's Algorithm Interactive Demonstrator")
 st.caption("Quantum Integer Factorization Engine — AION-IA Internship Task 04")
 
-tab_factor, tab_flow, tab_circuit, tab_measurements, tab_period, tab_notes = st.tabs([
+RSA_MODULUS = 15
+RSA_PUBLIC_EXPONENT = 3
+FACTOR_EXAMPLES = {
+    "15 = 3 × 5 · base 7 · Qiskit circuit": (15, 7),
+    "21 = 3 × 7 · base 2 · emulated": (21, 2),
+    "35 = 5 × 7 · base 2 · emulated": (35, 2),
+    "55 = 5 × 11 · base 2 · emulated": (55, 2),
+    "77 = 7 × 11 · base 2 · emulated": (77, 2),
+    "91 = 7 × 13 · base 3 · emulated": (91, 3),
+}
+
+
+def _load_factor_example():
+    """Fill the practical factorizer with a known-good example and base."""
+    selected = st.session_state.get("factor_example")
+    if selected in FACTOR_EXAMPLES:
+        number, base = FACTOR_EXAMPLES[selected]
+        st.session_state["factor_N"] = number
+        st.session_state["factor_base_mode"] = "I want to choose a base"
+        st.session_state["factor_a"] = base
+
+tab_rsa, tab_factor, tab_flow, tab_circuit, tab_measurements, tab_period, tab_notes = st.tabs([
+    "🔐 RSA Lock Story",
     "🧮 Factor a Number",
     "📋 Data Flow",
     "⚛️ Quantum Circuit",
@@ -99,20 +121,96 @@ tab_factor, tab_flow, tab_circuit, tab_measurements, tab_period, tab_notes = st.
     "📑 About this Demo",
 ])
 
+with tab_rsa:
+    st.subheader("A tiny locked message")
+    st.write(
+        "Imagine Bob shares a lock anyone can use, but keeps the key that opens it. "
+        "RSA builds that lock from two secret prime numbers. Shor's algorithm could find those primes by finding a repeating pattern."
+    )
+
+    public_col, message_col, cipher_col = st.columns(3)
+    public_col.metric("Bob's public lock", f"N = {RSA_MODULUS}, e = {RSA_PUBLIC_EXPONENT}")
+    with st.form("rsa_story_form"):
+        toy_message = st.number_input("Alice's tiny message", min_value=1, max_value=RSA_MODULUS - 1, value=2, step=1)
+        unlock_clicked = st.form_submit_button("Try to open the lock", type="primary", use_container_width=True)
+
+    if unlock_clicked:
+        with st.spinner("Following the lock's number trail…"):
+            rsa_result = run_shor_pipeline(
+                N=RSA_MODULUS, a=7, num_counting_qubits=4, shots=2048,
+            )
+        st.session_state["rsa_story_result"] = rsa_result
+        st.session_state["rsa_story_message"] = int(toy_message)
+        st.session_state["shor_result"] = rsa_result
+
+    rsa_result = st.session_state.get("rsa_story_result")
+    rsa_message = st.session_state.get("rsa_story_message", int(toy_message))
+    ciphertext = pow(rsa_message, RSA_PUBLIC_EXPONENT, RSA_MODULUS)
+    message_col.metric("Message before locking", rsa_message)
+    cipher_col.metric("Locked message", ciphertext)
+
+    flow_cols = st.columns(5)
+    flow_cols[0].markdown("#### 1. Public lock\nAnyone can see **15**")
+    flow_cols[1].markdown(f"#### 2. Lock message\n`{rsa_message}` becomes **{ciphertext}**")
+    flow_cols[2].markdown("#### 3. Find secret pieces\nShor finds **3** and **5**")
+    flow_cols[3].markdown("#### 4. Rebuild key\nPrivate key number is **3**")
+    flow_cols[4].markdown(f"#### 5. Unlock\n`{ciphertext}` opens back to **{rsa_message}**")
+
+    if rsa_result is None:
+        st.info("Press **Try to open the lock** to run the Shor demonstrator on this tiny public number.")
+    elif rsa_result.success:
+        p, q = rsa_result.factors
+        phi = (p - 1) * (q - 1)
+        private_exponent = pow(RSA_PUBLIC_EXPONENT, -1, phi)
+        unlocked = pow(ciphertext, private_exponent, RSA_MODULUS)
+        st.markdown("### The lock opens, one small step at a time")
+        key_cols = st.columns(4)
+        key_cols[0].metric("Hidden prime pieces", f"{p} × {q}")
+        key_cols[1].metric("Number of possible key steps", phi)
+        key_cols[2].metric("Private key number", private_exponent)
+        key_cols[3].metric("Message after unlocking", unlocked)
+        st.success(
+            f"The public lock was **({RSA_MODULUS}, {RSA_PUBLIC_EXPONENT})**. "
+            f"Factoring {RSA_MODULUS} gave {p} and {q}; that let us rebuild the private key and recover **{unlocked}**."
+        )
+        st.caption(
+            "In this app, N = 15 runs in a Qiskit simulator. The message and key are toy numbers, "
+            "and small numbers are easy to factor classically too. This is a lesson about a possible future risk, not a real security attack."
+        )
+    else:
+        st.warning(f"This run did not recover factors: {rsa_result.message}. Press the button to try the simulated run again.")
+
+    st.markdown(
+        "[Why RSA is considered quantum-vulnerable](https://www.nist.gov/cybersecurity-and-privacy/what-post-quantum-cryptography)"
+    )
+
 with tab_factor:
     st.subheader("Try factoring an integer")
     st.write("Enter a number and run the demonstrator. You can let it choose a base or provide one yourself.")
+    st.caption(
+        "Ready-to-try examples (all have distinct prime factors): 15, 21, 35, 55, 77, and 91. "
+        "Only 15 runs the Qiskit circuit; the others use emulated measurements."
+    )
+    st.selectbox(
+        "Quick example — choose one to fill in the controls",
+        ["Choose an example…", *FACTOR_EXAMPLES.keys()],
+        key="factor_example",
+        on_change=_load_factor_example,
+    )
 
     with st.form("factor_number_form"):
         input_col, base_col = st.columns(2)
         with input_col:
-            N = st.number_input("Integer to factor", min_value=2, max_value=99, value=15, step=1)
+            N = st.number_input("Integer to factor", min_value=2, max_value=99, value=15, step=1, key="factor_N")
         with base_col:
-            base_mode = st.selectbox("Base selection", ["Choose automatically", "I want to choose a base"])
+            base_mode = st.selectbox(
+                "Base selection", ["Choose automatically", "I want to choose a base"],
+                key="factor_base_mode",
+            )
             a_val = None
             if base_mode == "I want to choose a base" and N >= 3:
                 a_val = st.number_input("Base a", min_value=2, max_value=int(N) - 1,
-                                        value=min(7, int(N) - 1), step=1)
+                                        value=min(7, int(N) - 1), step=1, key="factor_a")
             elif base_mode == "I want to choose a base":
                 st.caption("A base is not needed for this input.")
 

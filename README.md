@@ -19,6 +19,7 @@ An interactive, end-to-end demonstrator of Peter Shor's quantum integer factoriz
 * **Continued Fractions Algorithm:** Recovers candidate orders $r$ from quantum phase measurements.
 * **Classical Factor Extraction:** Computes $\gcd(a^{r/2} \pm 1, N)$ to extract non-trivial factors.
 * **Interactive Probability Visualisation:** Dynamic Plotly distribution of measured phase states.
+* **RSA Lock Story:** A toy locked-message walkthrough shows how factoring a public modulus can reveal the private key.
 
 ## 🔄 Data Flow Trace
 
